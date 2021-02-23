@@ -43,7 +43,6 @@ namespace UnityNetworkingLibraryTest
             Assert.AreEqual(receivedMessage, message);
 
             return;
-            //TODO Wait for data recieved and assert
             
             void OnReceived(byte[] data, int bytesRead)
             {
