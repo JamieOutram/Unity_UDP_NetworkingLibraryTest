@@ -20,10 +20,10 @@ namespace UnityNetworkingLibraryTest
             bool messageReceived = false;
             string receivedMessage = "";
             UDPSocket server = new UDPSocket();
-            server.Server(ip, port);
+            Assert.IsTrue(server.Server(ip, port));
             
             UDPSocket client = new UDPSocket();
-            client.Client(ip, port);
+            Assert.IsTrue(client.Client(ip, port));
 
             server.OnReceived += OnReceived;
             client.Send(message);
