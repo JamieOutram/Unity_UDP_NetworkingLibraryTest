@@ -1,11 +1,17 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System.Text;
+using System.Threading;
 using UnityNetworkingLibrary;
-using UnityNetworkingLibrary.ExceptionExtensions;
 
 namespace UnityNetworkingLibraryTest
 {
     [TestClass]
-    class PacketBufferTests
+    public class PacketBufferTests
     {
+        [TestMethod]
+        public void TestTestMethod()
+        {
+            Assert.IsTrue(true);
+        }
     }
 }

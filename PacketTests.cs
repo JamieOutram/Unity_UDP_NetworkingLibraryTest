@@ -1,4 +1,4 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using UnityNetworkingLibrary;
 using UnityNetworkingLibrary.ExceptionExtensions;
 using System;
@@ -9,7 +9,7 @@ using System.Linq;
 namespace UnityNetworkingLibraryTest
 {
     [TestClass]
-    class PacketTests
+    public class PacketTests
     {
         const int ExpectedPacketLengthA = Packet.headerSize + 1; //Minimum packet data size is 1
         Packet FakeDataPacketA()
@@ -23,15 +23,15 @@ namespace UnityNetworkingLibraryTest
         const int ExpectedPacketLengthB = PacketManager._maxPacketSizeBytes;
         Packet FakeDataPacketB()
         {
-            byte[] data = new byte[PacketManager._maxPacketSizeBytes];
+            byte[] data = new byte[PacketManager._maxPacketDataBytes];
             var ackedBits = new BitArray(Packet.ackedBitsLength);
             ackedBits.SetAll(true);
-            return new Packet(ushort.MaxValue, ackedBits, PacketType.dataUnreliable, 1, data,byte.MaxValue);
+            return new Packet(ushort.MaxValue, ackedBits, PacketType.dataUnreliable, ulong.MaxValue, data, byte.MaxValue);
         }
         Packet FakeDataPacketRandom(Random rand)
         {
             //Random data
-            byte[] data = new byte[rand.Next(1,PacketManager._maxPacketDataBytes)];
+            byte[] data = new byte[rand.Next(1, PacketManager._maxPacketDataBytes)];
             rand.NextBytes(data);
             //Random Id
             ushort id = (ushort)rand.Next(0, ushort.MaxValue);
@@ -51,6 +51,7 @@ namespace UnityNetworkingLibraryTest
             ackedBits.SetAll(true);
             return new Packet(0, ackedBits, type, 1);
         }
+
 
         [TestMethod]
         public void Get_DataPacketLength_ReturnsPacketSize()
@@ -76,7 +77,7 @@ namespace UnityNetworkingLibraryTest
         public void Decode_RandomSerializedPacket_ReturnsCorrectHeaderAndDataInfo()
         {
             Random rand = new Random(0);
-            for(int i=0; i<10; i++)
+            for (int i = 0; i < 10; i++)
             {
                 var randomPacket = FakeDataPacketRandom(rand);
                 var expectedHeader = new Packet.Header(randomPacket.Id, randomPacket.AckedBits, randomPacket.Type, randomPacket.Salt);
@@ -89,9 +90,9 @@ namespace UnityNetworkingLibraryTest
                 Assert.AreEqual(decodedHeader.id, expectedHeader.id);
                 Assert.AreEqual(decodedHeader.packetType, expectedHeader.packetType);
                 Assert.AreEqual(decodedHeader.salt, expectedHeader.salt);
-                Assert.IsTrue(decodedHeader.ackedBits.Xor(expectedHeader.ackedBits).OfType<bool>().All(e=>!e)); //TODO: Slow as hell, might want to not use bit arrays
+                Assert.IsTrue(decodedHeader.ackedBits.Xor(expectedHeader.ackedBits).OfType<bool>().All(e => !e)); //TODO: Slow as hell, might want to not use bit arrays
                 //Check data Array
-                for(int j = 0; j<expectedData.Length; j++)
+                for (int j = 0; j < expectedData.Length; j++)
                 {
                     Assert.AreEqual(decodedData[i], expectedData[i]);
                 }
@@ -104,7 +105,7 @@ namespace UnityNetworkingLibraryTest
             Stopwatch stopwatch = new Stopwatch();
             stopwatch.Start();
             int runs = 10;
-            long total=0, min=long.MaxValue, max = 0;
+            long total = 0, min = long.MaxValue, max = 0;
             Random rand = new Random(0);
             for (int i = 0; i < runs; i++)
             {
@@ -121,7 +122,7 @@ namespace UnityNetworkingLibraryTest
                 total += time;
             }
             stopwatch.Stop();
-            long avg = total/runs;
+            long avg = total / runs;
             Console.WriteLine("Test Took: " + total + " milliseconds");
             Assert.IsTrue(avg < 100);
             Assert.IsTrue(min < 100);
