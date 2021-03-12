@@ -17,7 +17,7 @@ namespace UnityNetworkingLibraryTest
             var ackedBits = new BitArray(Packet.ackedBitsLength);
             ackedBits.SetAll(false);
             //Salt is random
-            return new Packet(0, ackedBits, PacketType.dataReliable, 12345);
+            return new Packet(0, 0, ackedBits, PacketType.dataReliable, 12345);
         }
 
         const int ExpectedPacketLengthB = PacketManager._maxPacketSizeBytes;
@@ -26,7 +26,7 @@ namespace UnityNetworkingLibraryTest
             byte[] data = new byte[PacketManager._maxPacketDataBytes];
             var ackedBits = new BitArray(Packet.ackedBitsLength);
             ackedBits.SetAll(true);
-            return new Packet(ushort.MaxValue, ackedBits, PacketType.dataUnreliable, ulong.MaxValue, data, byte.MaxValue);
+            return new Packet(ushort.MaxValue, ushort.MaxValue, ackedBits, PacketType.dataUnreliable, ulong.MaxValue, data, byte.MaxValue);
         }
         Packet FakeDataPacketRandom(Random rand)
         {
@@ -35,6 +35,7 @@ namespace UnityNetworkingLibraryTest
             rand.NextBytes(data);
             //Random Id
             ushort id = (ushort)rand.Next(0, ushort.MaxValue);
+            ushort ackId = (ushort)rand.Next(0, ushort.MaxValue);
             //Random ackedBits
             var buffer = new byte[Packet.ackedBytesLength];
             rand.NextBytes(buffer);
@@ -43,13 +44,13 @@ namespace UnityNetworkingLibraryTest
             var buf = new byte[8];
             rand.NextBytes(buf);
             var salt = (ulong)BitConverter.ToInt64(buf, 0);
-            return new Packet(id, ackedBits, PacketType.dataUnreliable, salt, data, byte.MaxValue);
+            return new Packet(id, ackId, ackedBits, PacketType.dataUnreliable, salt, data, byte.MaxValue);
         }
         Packet FakeEmptyPacket(PacketType type)
         {
             var ackedBits = new BitArray(Packet.ackedBitsLength);
             ackedBits.SetAll(true);
-            return new Packet(0, ackedBits, type, 1);
+            return new Packet(0, 0, ackedBits, type, 1);
         }
 
 
@@ -80,17 +81,17 @@ namespace UnityNetworkingLibraryTest
             for (int i = 0; i < 10; i++)
             {
                 var randomPacket = FakeDataPacketRandom(rand);
-                var expectedHeader = new Packet.Header(randomPacket.Id, randomPacket.AckedBits, randomPacket.Type, randomPacket.Salt);
                 var expectedData = randomPacket.GetMessageData();
 
                 var serialized = randomPacket.Serialize();
 
                 (var decodedHeader, var decodedData) = Packet.Decode(serialized);
 
-                Assert.AreEqual(decodedHeader.id, expectedHeader.id);
-                Assert.AreEqual(decodedHeader.packetType, expectedHeader.packetType);
-                Assert.AreEqual(decodedHeader.salt, expectedHeader.salt);
-                Assert.IsTrue(decodedHeader.ackedBits.Xor(expectedHeader.ackedBits).OfType<bool>().All(e => !e)); //TODO: Slow as hell, might want to not use bit arrays
+                Assert.AreEqual(decodedHeader.id, randomPacket.Id);
+                Assert.AreEqual(decodedHeader.ackId, randomPacket.AckId);
+                Assert.AreEqual(decodedHeader.packetType, randomPacket.Type);
+                Assert.AreEqual(decodedHeader.salt, randomPacket.Salt);
+                Assert.IsTrue(decodedHeader.ackedBits.Xor(randomPacket.AckedBits).OfType<bool>().All(e => !e)); //TODO: Slow as hell, might want to not use bit arrays
                 //Check data Array
                 for (int j = 0; j < expectedData.Length; j++)
                 {
@@ -100,54 +101,44 @@ namespace UnityNetworkingLibraryTest
         }
 
         [TestMethod]
-        public void Time_RandomSerialization_ShortAsPossible()
+        public void Time_100RandomSerializationAndDeserialization_ShortAsPossible()
         {
             Stopwatch stopwatch = new Stopwatch();
             stopwatch.Start();
-            int runs = 10;
+            int runs = 100;
             long total = 0, min = long.MaxValue, max = 0;
             Random rand = new Random(0);
+            Packet randomPacket;
+            Packet.Header test;
+            byte[] serialized, testData;
+            long time;
             for (int i = 0; i < runs; i++)
             {
                 stopwatch.Restart();
-                var randomPacket = FakeDataPacketRandom(rand);
+                randomPacket = FakeDataPacketRandom(rand);
 
-                var serialized = randomPacket.Serialize();
+                serialized = randomPacket.Serialize();
 
-                (_, _) = Packet.Decode(serialized);
+                (test, testData) = Packet.Decode(serialized);
 
-                long time = stopwatch.ElapsedMilliseconds;
+                time = stopwatch.ElapsedTicks * 1000000L / Stopwatch.Frequency;
                 max = Math.Max(max, time);
                 min = Math.Min(min, time);
                 total += time;
+                Console.WriteLine("Run Took: " + time + " microseconds");
+                
+                //Assert to avoid optimization
+                Assert.AreEqual(test.id, randomPacket.Id);
+                Assert.AreEqual(test.ackId, randomPacket.AckId);
+                Assert.AreEqual(test.packetType, randomPacket.Type);
+                Assert.AreEqual(test.salt, randomPacket.Salt);
             }
             stopwatch.Stop();
             long avg = total / runs;
-            Console.WriteLine("Test Took: " + total + " milliseconds");
-            Assert.IsTrue(avg < 100);
-            Assert.IsTrue(min < 100);
-            Assert.IsTrue(max < 150);
-        }
-
-        [TestMethod]
-        public void Time_RandomDecode_ShortAsPossible()
-        {
-            Stopwatch stopwatch = new Stopwatch();
-            throw new NotImplementedException();
-        }
-
-        [TestMethod]
-        public void Time_MaxSizeSerialization_ShortAsPossible()
-        {
-            Stopwatch stopwatch = new Stopwatch();
-            throw new NotImplementedException();
-        }
-
-        [TestMethod]
-        public void Time_MaxSizeDecode_ShortAsPossible()
-        {
-            Stopwatch stopwatch = new Stopwatch();
-            throw new NotImplementedException();
+            Console.WriteLine("Test Took: " + total + " microseconds");
+            Assert.IsTrue(avg < 1000);
+            Assert.IsTrue(min < 1000);
+            Assert.IsTrue(max < 7000);
         }
 
     }
