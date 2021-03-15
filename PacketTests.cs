@@ -1,5 +1,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using UnityNetworkingLibrary;
+using UnityNetworkingLibrary.Utils;
 using UnityNetworkingLibrary.ExceptionExtensions;
 using System;
 using System.Collections;
@@ -14,8 +15,7 @@ namespace UnityNetworkingLibraryTest
         const int ExpectedPacketLengthA = Packet.headerSize + 1; //Minimum packet data size is 1
         Packet FakeDataPacketA()
         {
-            var ackedBits = new BitArray(Packet.ackedBitsLength);
-            ackedBits.SetAll(false);
+            var ackedBits = new AckBitArray(Packet.ackedBitsLength);
             //Salt is random
             return new Packet(0, 0, ackedBits, PacketType.dataReliable, 12345);
         }
@@ -24,8 +24,7 @@ namespace UnityNetworkingLibraryTest
         Packet FakeDataPacketB()
         {
             byte[] data = new byte[PacketManager._maxPacketDataBytes];
-            var ackedBits = new BitArray(Packet.ackedBitsLength);
-            ackedBits.SetAll(true);
+            var ackedBits = new AckBitArray(Packet.ackedBitsLength, 0xFFFFFFFFFFFFFFFF);
             return new Packet(ushort.MaxValue, ushort.MaxValue, ackedBits, PacketType.dataUnreliable, ulong.MaxValue, data, byte.MaxValue);
         }
         Packet FakeDataPacketRandom(Random rand)
@@ -39,7 +38,7 @@ namespace UnityNetworkingLibraryTest
             //Random ackedBits
             var buffer = new byte[Packet.ackedBytesLength];
             rand.NextBytes(buffer);
-            var ackedBits = new BitArray(buffer);
+            var ackedBits = new AckBitArray(buffer);
             //Random ulong for salt
             var buf = new byte[8];
             rand.NextBytes(buf);
@@ -48,8 +47,7 @@ namespace UnityNetworkingLibraryTest
         }
         Packet FakeEmptyPacket(PacketType type)
         {
-            var ackedBits = new BitArray(Packet.ackedBitsLength);
-            ackedBits.SetAll(true);
+            var ackedBits = new AckBitArray(Packet.ackedBitsLength, 0xFFFFFFFFFFFFFFFF);
             return new Packet(0, 0, ackedBits, type, 1);
         }
 
@@ -91,7 +89,7 @@ namespace UnityNetworkingLibraryTest
                 Assert.AreEqual(decodedHeader.ackId, randomPacket.AckId);
                 Assert.AreEqual(decodedHeader.packetType, randomPacket.Type);
                 Assert.AreEqual(decodedHeader.salt, randomPacket.Salt);
-                Assert.IsTrue(decodedHeader.ackedBits.Xor(randomPacket.AckedBits).OfType<bool>().All(e => !e)); //TODO: Slow as hell, might want to not use bit arrays
+                Assert.IsTrue(decodedHeader.ackedBits == randomPacket.AckedBits); 
                 //Check data Array
                 for (int j = 0; j < expectedData.Length; j++)
                 {
