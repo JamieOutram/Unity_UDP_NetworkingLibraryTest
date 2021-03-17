@@ -1,18 +1,21 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using UnityNetworkingLibrary;
 using UnityNetworkingLibrary.Utils;
+using UnityNetworkingLibrary.Messages;
 using UnityNetworkingLibrary.ExceptionExtensions;
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 
 namespace UnityNetworkingLibraryTest
 {
+    using Utils;
     [TestClass]
     public class PacketTests
     {
-        const int ExpectedPacketLengthA = Packet.headerSize + 1; //Minimum packet data size is 1
+        const int ExpectedPacketLengthA = Packet.headerSize; //Minimum packet data size
         Packet FakeDataPacketA()
         {
             var ackedBits = new AckBitArray(Packet.ackedBitsLength);
@@ -23,15 +26,28 @@ namespace UnityNetworkingLibraryTest
         const int ExpectedPacketLengthB = PacketManager._maxPacketSizeBytes;
         Packet FakeDataPacketB()
         {
-            byte[] data = new byte[PacketManager._maxPacketDataBytes];
+            //Engineered to take up all byte space
+            List<Message> data = new List<Message>();
+            int lengthTotal = 0;
+            MessageExample m = new MessageExample(0, "Test12"); //17 byte message for 17*59 = 1003 max size
+
+            while (lengthTotal < PacketManager._maxPacketDataBytes) 
+            { 
+                data.Add(m);
+                lengthTotal += m.Length;
+            }
+
             var ackedBits = new AckBitArray(Packet.ackedBitsLength, 0xFFFFFFFFFFFFFFFF);
-            return new Packet(ushort.MaxValue, ushort.MaxValue, ackedBits, PacketType.dataUnreliable, ulong.MaxValue, data, byte.MaxValue);
+            return new Packet(ushort.MaxValue, ushort.MaxValue, ackedBits, PacketType.dataUnreliable, ulong.MaxValue, data.ToArray(), byte.MaxValue);
         }
         Packet FakeDataPacketRandom(Random rand)
         {
-            //Random data
-            byte[] data = new byte[rand.Next(1, PacketManager._maxPacketDataBytes)];
-            rand.NextBytes(data);
+            //Random messages
+            var messages = new MessageExample[rand.Next(0,30)];
+            for(int i = 0; i<messages.Length; i++)
+            {
+                messages[i] = new MessageExample(rand.Next(int.MinValue, int.MaxValue), RandomExtensions.RandomString(rand.Next(1, 25), rand));
+            }
             //Random Id
             ushort id = (ushort)rand.Next(0, ushort.MaxValue);
             ushort ackId = (ushort)rand.Next(0, ushort.MaxValue);
@@ -43,7 +59,7 @@ namespace UnityNetworkingLibraryTest
             var buf = new byte[8];
             rand.NextBytes(buf);
             var salt = (ulong)BitConverter.ToInt64(buf, 0);
-            return new Packet(id, ackId, ackedBits, PacketType.dataUnreliable, salt, data, byte.MaxValue);
+            return new Packet(id, ackId, ackedBits, PacketType.dataUnreliable, salt, messages, byte.MaxValue);
         }
         Packet FakeEmptyPacket(PacketType type)
         {
@@ -76,14 +92,14 @@ namespace UnityNetworkingLibraryTest
         public void Decode_RandomSerializedPacket_ReturnsCorrectHeaderAndDataInfo()
         {
             Random rand = new Random(0);
-            for (int i = 0; i < 10; i++)
+            for (int i = 0; i < 100; i++)
             {
                 var randomPacket = FakeDataPacketRandom(rand);
-                var expectedData = randomPacket.GetMessageData();
+                var expectedData = randomPacket.GetMessages();
 
                 var serialized = randomPacket.Serialize();
 
-                (var decodedHeader, var decodedData) = Packet.Decode(serialized);
+                (var decodedHeader, var decodedData) = Packet.Deserialize(serialized);
 
                 Assert.AreEqual(decodedHeader.id, randomPacket.Id);
                 Assert.AreEqual(decodedHeader.ackId, randomPacket.AckId);
@@ -93,7 +109,11 @@ namespace UnityNetworkingLibraryTest
                 //Check data Array
                 for (int j = 0; j < expectedData.Length; j++)
                 {
-                    Assert.AreEqual(decodedData[i], expectedData[i]);
+                    Assert.AreEqual(decodedData[j].Type, MessageType.MessageExample);
+                    MessageExample md = (MessageExample)decodedData[j];
+                    MessageExample me = (MessageExample)expectedData[j];
+                    Assert.AreEqual(md.IntData, me.IntData);
+                    Assert.AreEqual(md.StringData, me.StringData);
                 }
             }
         }
@@ -108,7 +128,8 @@ namespace UnityNetworkingLibraryTest
             Random rand = new Random(0);
             Packet randomPacket;
             Packet.Header test;
-            byte[] serialized, testData;
+            byte[] serialized;
+            Message[] testData;
             long time;
             for (int i = 0; i < runs; i++)
             {
@@ -117,7 +138,7 @@ namespace UnityNetworkingLibraryTest
 
                 serialized = randomPacket.Serialize();
 
-                (test, testData) = Packet.Decode(serialized);
+                (test, testData) = Packet.Deserialize(serialized);
 
                 time = stopwatch.ElapsedTicks * 1000000L / Stopwatch.Frequency;
                 max = Math.Max(max, time);
@@ -136,7 +157,7 @@ namespace UnityNetworkingLibraryTest
             Console.WriteLine("Test Took: " + total + " microseconds");
             Assert.IsTrue(avg < 1000);
             Assert.IsTrue(min < 1000);
-            Assert.IsTrue(max < 7000);
+            Assert.IsTrue(max < 10000);
         }
 
     }
